@@ -95,7 +95,7 @@ document.getElementById('url').addEventListener('keypress',function(e){if(e.key=
 </html>`);
 });
 
-// BACKEND: RapidAPI + Claude Integration
+// BACKEND: Official YouTube API + Claude Integration
 app.post('/guide', async (req, res) => {
   const { url, lang } = req.body;
   if (!url) return res.status(400).json({ error: 'YouTube URL required' });
@@ -103,52 +103,45 @@ app.post('/guide', async (req, res) => {
   const language = lang || 'English';
 
   try {
-    // 1. URL se Video ID extract karna
+    // 1. URL se Video ID nikalna
     const videoId = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([^&\n?#]+)/)?.[1];
     if (!videoId) {
       throw new Error(language === 'English' ? 'Please enter a valid YouTube URL.' : 'Kripya ek valid YouTube URL enter karein.');
     }
 
-    let transcriptText = "";
+    let videoTitle = "";
+    let videoDescription = "";
 
-    // 2. RapidAPI (Solid API) se transcript fetch karna
+    // 2. Google YouTube API se video details lana
     try {
-      const apiResponse = await axios.get('https://youtube-transcript3.p.rapidapi.com/api/transcript', {
-        params: { videoId: videoId },
-        headers: {
-          'x-rapidapi-key': process.env.RAPIDAPI_KEY,
-          'x-rapidapi-host': 'youtube-transcript3.p.rapidapi.com'
+      const youtubeResponse = await axios.get(`https://www.googleapis.com/youtube/v3/videos`, {
+        params: {
+          part: 'snippet',
+          id: videoId,
+          key: process.env.YOUTUBE_API_KEY
         }
       });
 
-      if (apiResponse.data && apiResponse.data.transcript) {
-        // Saare text data ko ek single paragraph string me convert karna
-        transcriptText = apiResponse.data.transcript.map(line => line.text).join(' ');
+      if (youtubeResponse.data && youtubeResponse.data.items && youtubeResponse.data.items.length > 0) {
+        const snippet = youtubeResponse.data.items[0].snippet;
+        videoTitle = snippet.title;
+        videoDescription = snippet.description;
       } else {
-        throw new Error("No transcript format found");
+        throw new Error("Video not found");
       }
     } catch (apiError) {
-      console.error("RapidAPI Error:", apiError.message);
-      
-      // Selected Language ke basis par custom proxy error message
-      let errorMsg = 'Could not find automatic captions or subtitles for this video. Please try another video.';
-      if (language === 'Hindi') errorMsg = 'Is video me automatic captions ya subtitles nahi mil sake. Kripya koi dusri video try karein.';
-      if (language === 'Urdu') errorMsg = 'اس ویڈیو کے لیے سب ٹائٹلز نہیں مل سکے۔ براہ کرم کوئی دوسری ویڈیو ٹرائی کریں۔';
-      if (language === 'Spanish') errorMsg = 'No se pudieron encontrar subtítulos para este video. Por favor, intenta con otro video.';
-      if (language === 'French') errorMsg = 'Impossible de trouver des sous-titres pour cette vidéo. Veuillez essayer une autre vidéo.';
-      if (language === 'Arabic') errorMsg = 'لم يتم العثور على ترجمة مصاحبة لهذا الفيديو. يرجى محاولة فيديو آخر.';
-      
-      throw new Error(errorMsg);
+      console.error("YouTube API Error:", apiError.message);
+      throw new Error(language === 'English' ? 'Failed to fetch video details from YouTube.' : 'YouTube se video ki details nahi mil saki.');
     }
 
-    // 3. Claude AI API ko transcript bhej kar JSON respond karwana
+    // 3. Claude AI API ko details bhejna guide banane ke liye
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1500,
-      system: `You are an expert at creating practical step-by-step guides from provided YouTube video transcripts. You MUST respond with ONLY a valid JSON object — no explanation, no markdown, no backticks. Pure JSON only. Format: {"title": "Guide title", "steps": [{"number": 1, "title": "Step title", "detail": "Step explanation"}]}`,
+      system: `You are an expert at creating practical step-by-step guides based on a YouTube video's title and description. You MUST respond with ONLY a valid JSON object — no explanation, no markdown, no backticks. Pure JSON only. Format: {"title": "Guide title", "steps": [{"number": 1, "title": "Step title", "detail": "Step explanation"}]}`,
       messages: [{ 
         role: 'user', 
-        content: `Create a detailed step-by-step guide in ${language} language based on this video transcript:\n\n${transcriptText}\n\nMake it practical, easy to follow, and give exactly 6-8 steps.` 
+        content: `Create a detailed step-by-step guide in ${language} language based on this YouTube video data:\nVideo Title: ${videoTitle}\nVideo Description: ${videoDescription}\n\nMake it practical, fill in the logical cooking/tutorial steps if the description is short, and give exactly 6-8 steps.` 
       }]
     }, {
       headers: {
@@ -158,7 +151,6 @@ app.post('/guide', async (req, res) => {
       }
     });
 
-    // 4. Response ko clean karke parse karna aur response dena
     const content = response.data.content[0].text;
     const clean = content.replace(/```json|```/g, '').trim();
     const guide = JSON.parse(clean);
