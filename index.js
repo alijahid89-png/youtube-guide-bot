@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// FRONTEND: HTML, CSS aur JavaScript code serve karne ke liye
+// FRONTEND CODE
 app.get('/', (req, res) => {
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -95,24 +95,47 @@ document.getElementById('url').addEventListener('keypress',function(e){if(e.key=
 </html>`);
 });
 
-// BACKEND: Official YouTube API + Claude Integration
+// BACKEND: Video ID extract karne ka naya full-proof tareeqa
 app.post('/guide', async (req, res) => {
-  const { url, lang } = req.body;
+  let { url, lang } = req.body;
   if (!url) return res.status(400).json({ error: 'YouTube URL required' });
 
   const language = lang || 'English';
 
   try {
-    // 1. URL se Video ID nikalna
-    const videoId = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([^&\n?#]+)/)?.[1];
-    if (!videoId) {
-      throw new Error(language === 'English' ? 'Please enter a valid YouTube URL.' : 'Kripya ek valid YouTube URL enter karein.');
+    // URL se clean video ID nikalne ka sabse robust naya tarika
+    let videoId = "";
+    try {
+      if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1].split(/[?#]/)[0];
+      } else if (url.includes('youtube.com/embed/')) {
+        videoId = url.split('youtube.com/embed/')[1].split(/[?#]/)[0];
+      } else if (url.includes('youtube.com/shorts/')) {
+        videoId = url.split('youtube.com/shorts/')[1].split(/[?#]/)[0];
+      } else if (url.includes('v=')) {
+        videoId = url.split('v=')[1].split('&')[0].split(/[?#]/)[0];
+      } else {
+        // Fallback regex agar upar waale miss ho jayein
+        const match = url.match(/(?:v=|shorts\/|embed\/|youtu\.be\/)([^&\n?#]+)/);
+        videoId = match ? match[1] : "";
+      }
+    } catch (err) {
+      console.error("ID Extraction failed", err);
     }
+
+    // Safai ke liye kisi bhi bache hue kachre ko saaf karna
+    videoId = videoId.trim();
+
+    if (!videoId || videoId.length !== 11) {
+      throw new Error(language === 'English' ? 'Please enter a valid, clean YouTube URL.' : 'Kripya ek saaf aur valid YouTube URL enter karein.');
+    }
+
+    console.log("Fetching data for Video ID:", videoId);
 
     let videoTitle = "";
     let videoDescription = "";
 
-    // 2. Google YouTube API se video details lana
+    // YouTube API calling
     try {
       const youtubeResponse = await axios.get(`https://www.googleapis.com/youtube/v3/videos`, {
         params: {
@@ -127,14 +150,14 @@ app.post('/guide', async (req, res) => {
         videoTitle = snippet.title;
         videoDescription = snippet.description;
       } else {
-        throw new Error("Video not found");
+        throw new Error("Video not found on YouTube with this ID");
       }
     } catch (apiError) {
-      console.error("YouTube API Error:", apiError.message);
-      throw new Error(language === 'English' ? 'Failed to fetch video details from YouTube.' : 'YouTube se video ki details nahi mil saki.');
+      console.error("YouTube API Backend Error:", apiError.response ? apiError.response.data : apiError.message);
+      throw new Error(language === 'English' ? 'Failed to fetch video details from YouTube API.' : 'YouTube API se video ki details nahi mil saki.');
     }
 
-    // 3. Claude AI API ko details bhejna guide banane ke liye
+    // Claude AI API integration
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1500,
