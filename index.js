@@ -77,7 +77,8 @@ Maximum 8 steps. Make steps practical and actionable.`,
     });
 
     const content = response.data.content[0].text;
-    const guide = JSON.parse(content);
+const clean = content.replace(/```json|```/g, '').trim();
+const guide = JSON.parse(clean);
     res.json(guide);
 
   } catch (error) {
