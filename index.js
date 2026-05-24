@@ -8,7 +8,46 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.send('YouTube Guide Bot is running!');
+  res.send(`<!DOCTYPE html>
+<html>
+<head>
+<title>YouTube Guide Bot</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:700px;margin:50px auto;padding:20px}
+h1{color:#ff0000}
+input{width:100%;padding:12px;font-size:16px;margin:10px 0;border:1px solid #ddd;border-radius:8px}
+button{background:#ff0000;color:white;padding:12px 30px;font-size:16px;border:none;border-radius:8px;cursor:pointer}
+button:hover{background:#cc0000}
+#output{margin-top:30px;padding:20px;background:#f9f9f9;border-radius:8px;display:none}
+.step{background:white;margin:10px 0;padding:15px;border-radius:8px;border-left:4px solid #ff0000}
+.step-num{color:#ff0000;font-weight:bold}
+</style>
+</head>
+<body>
+<h1>YouTube Video Guide Bot</h1>
+<p>YouTube link paste karo — AI step-by-step guide banayega</p>
+<input type="text" id="url" placeholder="https://www.youtube.com/watch?v=..." />
+<button onclick="getGuide()">Guide Banao</button>
+<div id="output"></div>
+<script>
+async function getGuide(){
+  const url=document.getElementById('url').value.trim();
+  const out=document.getElementById('output');
+  if(!url){out.style.display='block';out.innerHTML='<p>URL daalo pehle!</p>';return;}
+  out.style.display='block';
+  out.innerHTML='<p>Guide ban rahi hai... thoda wait karo...</p>';
+  try{
+    const res=await fetch('/guide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    const data=await res.json();
+    if(data.error){out.innerHTML='<p style="color:red">'+data.error+'</p>';return;}
+    let html='<h2>'+data.title+'</h2>';
+    data.steps.forEach(s=>{html+='<div class="step"><span class="step-num">Step '+s.number+': '+s.title+'</span><p>'+s.detail+'</p></div>';});
+    out.innerHTML=html;
+  }catch(e){out.innerHTML='<p style="color:red">Error: '+e.message+'</p>';}
+}
+</script>
+</body>
+</html>`);
 });
 
 app.post('/guide', async (req, res) => {
