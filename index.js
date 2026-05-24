@@ -8,60 +8,107 @@ app.use(express.json());
 
 app.get('/', (req, res) => {
   res.send(`<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>YouTube Guide Bot</title>
 <style>
-body{font-family:Arial,sans-serif;max-width:700px;margin:50px auto;padding:20px}
-h1{color:#ff0000}
-input{width:100%;padding:12px;font-size:16px;margin:10px 0;border:1px solid #ddd;border-radius:8px}
-button{background:#ff0000;color:white;padding:12px 30px;font-size:16px;border:none;border-radius:8px;cursor:pointer}
-button:hover{background:#cc0000}
-#output{margin-top:30px;padding:20px;background:#f9f9f9;border-radius:8px;display:none}
-.step{background:white;margin:10px 0;padding:15px;border-radius:8px;border-left:4px solid #ff0000}
-.step-num{color:#ff0000;font-weight:bold}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f9f9f9;min-height:100vh}
+.header{background:#ff0000;padding:20px;text-align:center;color:white}
+.header h1{font-size:28px;font-weight:700}
+.header p{font-size:14px;opacity:0.9;margin-top:5px}
+.container{max-width:750px;margin:40px auto;padding:20px}
+.card{background:white;border-radius:16px;padding:30px;box-shadow:0 2px 12px rgba(0,0,0,0.08)}
+.input-group{margin-bottom:16px}
+.input-group label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px}
+.input-group input,.input-group select{width:100%;padding:14px;font-size:15px;border:1.5px solid #e0e0e0;border-radius:10px;outline:none;transition:border 0.2s}
+.input-group input:focus,.input-group select:focus{border-color:#ff0000}
+.btn{width:100%;background:#ff0000;color:white;padding:14px;font-size:16px;font-weight:600;border:none;border-radius:10px;cursor:pointer;transition:background 0.2s;margin-top:8px}
+.btn:hover{background:#cc0000}
+.btn:disabled{background:#ffaaaa;cursor:not-allowed}
+#output{margin-top:28px;display:none}
+.guide-title{font-size:20px;font-weight:700;color:#222;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #ff0000}
+.step{background:#fff;border:1px solid #f0f0f0;border-left:4px solid #ff0000;border-radius:8px;padding:16px;margin-bottom:12px}
+.step-header{font-weight:700;color:#ff0000;font-size:14px;margin-bottom:6px}
+.step-detail{color:#444;font-size:15px;line-height:1.6}
+.loading{text-align:center;padding:30px;color:#888}
+.loading-spinner{width:40px;height:40px;border:4px solid #f0f0f0;border-top:4px solid #ff0000;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error{background:#fff5f5;border:1px solid #ffcccc;border-radius:8px;padding:16px;color:#cc0000;font-size:14px}
+.footer{text-align:center;margin-top:30px;color:#aaa;font-size:12px}
 </style>
 </head>
 <body>
-<h1>YouTube Video Guide Bot</h1>
-<p>YouTube link paste karo — AI step-by-step guide banayega</p>
-<input type="text" id="url" placeholder="https://www.youtube.com/watch?v=..." />
-<button onclick="getGuide()">Guide Banao</button>
-<div id="output"></div>
+<div class="header">
+  <h1>▶ YouTube Guide Bot</h1>
+  <p>Paste any YouTube link — get an instant step-by-step guide</p>
+</div>
+<div class="container">
+  <div class="card">
+    <div class="input-group">
+      <label>YouTube Video URL</label>
+      <input type="text" id="url" placeholder="https://www.youtube.com/watch?v=..." />
+    </div>
+    <div class="input-group">
+      <label>Guide Language</label>
+      <select id="lang">
+        <option value="English">English</option>
+        <option value="Hindi">Hindi (हिंदी)</option>
+        <option value="Urdu">Urdu (اردو)</option>
+        <option value="Spanish">Spanish (Español)</option>
+        <option value="Arabic">Arabic (العربية)</option>
+        <option value="French">French (Français)</option>
+      </select>
+    </div>
+    <button class="btn" id="btn" onclick="getGuide()">Generate Guide ▶</button>
+  </div>
+  <div id="output"></div>
+  <div class="footer">Powered by Claude AI • Free to use</div>
+</div>
 <script>
 async function getGuide(){
   const url=document.getElementById('url').value.trim();
+  const lang=document.getElementById('lang').value;
   const out=document.getElementById('output');
-  if(!url){out.style.display='block';out.innerHTML='<p>URL daalo pehle!</p>';return;}
+  const btn=document.getElementById('btn');
+  if(!url){out.style.display='block';out.innerHTML='<div class="error">Please enter a YouTube URL first.</div>';return;}
+  btn.disabled=true;
+  btn.textContent='Generating...';
   out.style.display='block';
-  out.innerHTML='<p>Guide ban rahi hai... thoda wait karo...</p>';
+  out.innerHTML='<div class="loading"><div class="loading-spinner"></div><p>Creating your guide in '+lang+'...</p></div>';
   try{
-    const res=await fetch('/guide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    const res=await fetch('/guide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,lang})});
     const data=await res.json();
-    if(data.error){out.innerHTML='<p style="color:red">'+data.error+'</p>';return;}
-    let html='<h2>'+data.title+'</h2>';
-    data.steps.forEach(s=>{html+='<div class="step"><span class="step-num">Step '+s.number+': '+s.title+'</span><p>'+s.detail+'</p></div>';});
+    if(data.error){out.innerHTML='<div class="error">'+data.error+'</div>';return;}
+    let html='<div class="guide-title">'+data.title+'</div>';
+    data.steps.forEach(s=>{html+='<div class="step"><div class="step-header">Step '+s.number+': '+s.title+'</div><div class="step-detail">'+s.detail+'</div></div>';});
     out.innerHTML=html;
-  }catch(e){out.innerHTML='<p style="color:red">Error: '+e.message+'</p>';}
+  }catch(e){out.innerHTML='<div class="error">Something went wrong. Please try again.</div>';}
+  finally{btn.disabled=false;btn.textContent='Generate Guide ▶';}
 }
+document.getElementById('url').addEventListener('keypress',function(e){if(e.key==='Enter')getGuide();});
 </script>
 </body>
 </html>`);
 });
 
 app.post('/guide', async (req, res) => {
-  const { url } = req.body;
+  const { url, lang } = req.body;
   if (!url) return res.status(400).json({ error: 'YouTube URL required' });
 
   try {
     const videoId = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
-    if (!videoId) throw new Error('Invalid YouTube URL');
+    if (!videoId) throw new Error('Please enter a valid YouTube URL');
+
+    const language = lang || 'English';
 
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      system: `You are an expert at creating step-by-step guides. Given a YouTube video URL, create a practical step-by-step guide. You MUST respond with ONLY a valid JSON object. No explanation, no markdown, no backticks. Just pure JSON in this exact format: {"title": "Guide title here", "steps": [{"number": 1, "title": "Step title", "detail": "Step detail here"}]}`,
-      messages: [{ role: 'user', content: `Create a step-by-step guide for this YouTube video: ${url}` }]
+      max_tokens: 1500,
+      system: `You are an expert at creating practical step-by-step guides from YouTube videos. You MUST respond with ONLY a valid JSON object — no explanation, no markdown, no backticks. Pure JSON only. Format: {"title": "Guide title", "steps": [{"number": 1, "title": "Step title", "detail": "Step explanation"}]}`,
+      messages: [{ role: 'user', content: `Create a detailed step-by-step guide in ${language} language for this YouTube video: ${url}. Make it practical and easy to follow. Give exactly 6-8 steps.` }]
     }, {
       headers: {
         'x-api-key': process.env.ANTHROPIC_API_KEY,
