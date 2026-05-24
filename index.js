@@ -117,12 +117,26 @@ app.post('/guide', async (req, res) => {
       const transcriptData = await videoInfo.getTranscript();
       
       if (transcriptData && transcriptData.transcript && transcriptData.transcript.snippets) {
-        // Saare text parts ko ek bade paragraph me jod dena
-        transcriptText = transcriptData.transcript.snippets
-          .map(snippet => snippet.text)
-          .join(' ');
-      } else {
-        throw new Error("No text snippets");
+      } catch (transcriptError) {
+      console.error("Transcript Fetch Error:", transcriptError);
+      
+      // Selected language ke hisab se error message set karna
+      let errorMsg = 'Is video me automatic captions ya subtitles nahi mil sake. Kripya koi dusri video try karein.'; // Default Hindi
+      
+      if (language === 'English') {
+        errorMsg = 'Could not find automatic captions or subtitles for this video. Please try another video.';
+      } else if (language === 'Spanish') {
+        errorMsg = 'No se pudieron encontrar subtítulos para este video. Por favor, intenta con otro video.';
+      } else if (language === 'French') {
+        errorMsg = 'Impossible de trouver des sous-titres pour cette vidéo. Veuillez essayer une autre vidéo.';
+      } else if (language === 'Urdu') {
+        errorMsg = 'اس ویڈیو کے لیے سب ٹائٹلز نہیں مل سکے۔ براہ کرم کوئی دوسری ویڈیو ٹرائی کریں۔';
+      } else if (language === 'Arabic') {
+        errorMsg = 'لم يتم العثور على ترجمة مصاحبة لهذا الفيديو. يرجى محاولة فيديو آخر.';
+      }
+
+      throw new Error(errorMsg);
+    }
       }
     } catch (transcriptError) {
       console.error("Transcript Fetch Error:", transcriptError);
