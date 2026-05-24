@@ -51,23 +51,17 @@ async function getGuide(){
 
 app.post('/guide', async (req, res) => {
   const { url } = req.body;
-  
-  if (!url) {
-    return res.status(400).json({ error: 'YouTube URL required' });
-  }
+  if (!url) return res.status(400).json({ error: 'YouTube URL required' });
 
   try {
     const videoId = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
-if (!videoId) throw new Error('Invalid YouTube URL');
-const text = `Create a comprehensive step-by-step guide for the YouTube video with ID: ${videoId}. URL: ${url}`;const response = await axios.post('https://api.anthropic.com/v1/messages', {
+    if (!videoId) throw new Error('Invalid YouTube URL');
+
+    const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1000,
-      system: `You are an expert at extracting actionable knowledge from video transcripts. 
-Given a transcript, create a clear step-by-step guide in JSON format only. 
-Respond ONLY with valid JSON, no markdown, no backticks.
-Format: {"title": "video topic", "steps": [{"number": 1, "title": "step title", "detail": "what to do"}]}
-Maximum 8 steps. Make steps practical and actionable.`,
-      messages: [{ role: 'user', content: `Extract a step-by-step guide from this transcript:\n\n${text}` }]
+      system: `You are an expert at creating step-by-step guides. Given a YouTube video URL, create a practical step-by-step guide. You MUST respond with ONLY a valid JSON object. No explanation, no markdown, no backticks. Just pure JSON in this exact format: {"title": "Guide title here", "steps": [{"number": 1, "title": "Step title", "detail": "Step detail here"}]}`,
+      messages: [{ role: 'user', content: `Create a step-by-step guide for this YouTube video: ${url}` }]
     }, {
       headers: {
         'x-api-key': process.env.ANTHROPIC_API_KEY,
@@ -77,13 +71,13 @@ Maximum 8 steps. Make steps practical and actionable.`,
     });
 
     const content = response.data.content[0].text;
-const clean = content.replace(/```json|```/g, '').trim();
-const guide = JSON.parse(clean);
+    const clean = content.replace(/```json|```/g, '').trim();
+    const guide = JSON.parse(clean);
     res.json(guide);
 
   } catch (error) {
     console.error(error.message);
-    res.status(500).json({ error: 'Failed to generate guide. Make sure video has captions.' });
+    res.status(500).json({ error: error.message });
   }
 });
 
