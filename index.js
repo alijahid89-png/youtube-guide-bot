@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const { YoutubeTranscript } = require('youtube-transcript');
+const { Innertube } = require('youtubei.js');
 
 const app = express();
 app.use(cors());
@@ -58,9 +58,14 @@ app.post('/guide', async (req, res) => {
   }
 
   try {
-    const transcript = await YoutubeTranscript.fetchTranscript(url);
-    const text = transcript.map(t => t.text).join(' ').slice(0, 4000);
-
+    const yt = await Innertube.create();
+const videoId = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
+const info = await yt.getInfo(videoId);
+const transcriptData = await info.getTranscript();
+const text = transcriptData.transcript.content.body.initial_segments
+  .map(s => s.snippet.text)
+  .join(' ')
+  .slice(0, 4000);
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1000,
