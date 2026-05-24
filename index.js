@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const { Innertube } = require('youtubei.js'); // YouTubei.js library import ki
 
 const app = express();
 app.use(cors());
@@ -96,54 +95,53 @@ document.getElementById('url').addEventListener('keypress',function(e){if(e.key=
 </html>`);
 });
 
-// BACKEND: Video se transcript nikal kar Claude AI se guide generate karne ke liye
+// BACKEND: RapidAPI + Claude Integration
 app.post('/guide', async (req, res) => {
   const { url, lang } = req.body;
   if (!url) return res.status(400).json({ error: 'YouTube URL required' });
 
+  const language = lang || 'English';
+
   try {
-    // 1. URL se Video ID nikalna (Regex jo har tarah ke links ko handle karega)
+    // 1. URL se Video ID extract karna
     const videoId = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([^&\n?#]+)/)?.[1];
-    if (!videoId) throw new Error('Kripya ek valid YouTube URL enter karein.');
+    if (!videoId) {
+      throw new Error(language === 'English' ? 'Please enter a valid YouTube URL.' : 'Kripya ek valid YouTube URL enter karein.');
+    }
 
-    const language = lang || 'English';
-
-    // 2. YouTubei.js initialize karke video transcript fetch karna
-    const youtube = await Innertube.create();
     let transcriptText = "";
 
+    // 2. RapidAPI (Solid API) se transcript fetch karna
     try {
-      const videoInfo = await youtube.getInfo(videoId);
-      const transcriptData = await videoInfo.getTranscript();
-      
-      if (transcriptData && transcriptData.transcript && transcriptData.transcript.snippets) {
-      } catch (transcriptError) {
-      console.error("Transcript Fetch Error:", transcriptError);
-      
-      // Selected language ke hisab se error message set karna
-      let errorMsg = 'Is video me automatic captions ya subtitles nahi mil sake. Kripya koi dusri video try karein.'; // Default Hindi
-      
-      if (language === 'English') {
-        errorMsg = 'Could not find automatic captions or subtitles for this video. Please try another video.';
-      } else if (language === 'Spanish') {
-        errorMsg = 'No se pudieron encontrar subtítulos para este video. Por favor, intenta con otro video.';
-      } else if (language === 'French') {
-        errorMsg = 'Impossible de trouver des sous-titres pour cette vidéo. Veuillez essayer une autre vidéo.';
-      } else if (language === 'Urdu') {
-        errorMsg = 'اس ویڈیو کے لیے سب ٹائٹلز نہیں مل سکے۔ براہ کرم کوئی دوسری ویڈیو ٹرائی کریں۔';
-      } else if (language === 'Arabic') {
-        errorMsg = 'لم يتم العثور على ترجمة مصاحبة لهذا الفيديو. يرجى محاولة فيديو آخر.';
-      }
+      const apiResponse = await axios.get('https://youtube-transcript3.p.rapidapi.com/api/transcript', {
+        params: { videoId: videoId },
+        headers: {
+          'x-rapidapi-key': process.env.RAPIDAPI_KEY,
+          'x-rapidapi-host': 'youtube-transcript3.p.rapidapi.com'
+        }
+      });
 
+      if (apiResponse.data && apiResponse.data.transcript) {
+        // Saare text data ko ek single paragraph string me convert karna
+        transcriptText = apiResponse.data.transcript.map(line => line.text).join(' ');
+      } else {
+        throw new Error("No transcript format found");
+      }
+    } catch (apiError) {
+      console.error("RapidAPI Error:", apiError.message);
+      
+      // Selected Language ke basis par custom proxy error message
+      let errorMsg = 'Could not find automatic captions or subtitles for this video. Please try another video.';
+      if (language === 'Hindi') errorMsg = 'Is video me automatic captions ya subtitles nahi mil sake. Kripya koi dusri video try karein.';
+      if (language === 'Urdu') errorMsg = 'اس ویڈیو کے لیے سب ٹائٹلز نہیں مل سکے۔ براہ کرم کوئی دوسری ویڈیو ٹرائی کریں۔';
+      if (language === 'Spanish') errorMsg = 'No se pudieron encontrar subtítulos para este video. Por favor, intenta con otro video.';
+      if (language === 'French') errorMsg = 'Impossible de trouver des sous-titres pour cette vidéo. Veuillez essayer une autre vidéo.';
+      if (language === 'Arabic') errorMsg = 'لم يتم العثور على ترجمة مصاحبة لهذا الفيديو. يرجى محاولة فيديو آخر.';
+      
       throw new Error(errorMsg);
     }
-      }
-    } catch (transcriptError) {
-      console.error("Transcript Fetch Error:", transcriptError);
-      throw new Error('Is video me automatic captions ya subtitles nahi mil sake. Kripya koi dusri video try karein.');
-    }
 
-    // 3. Taiyar Transcript ko Claude AI API ko bhejna
+    // 3. Claude AI API ko transcript bhej kar JSON respond karwana
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1500,
@@ -160,16 +158,14 @@ app.post('/guide', async (req, res) => {
       }
     });
 
-    // 4. Claude ke response ko clean karke JSON parse karna
+    // 4. Response ko clean karke parse karna aur response dena
     const content = response.data.content[0].text;
     const clean = content.replace(/```json|```/g, '').trim();
     const guide = JSON.parse(clean);
-    
-    // Fronted ko final guide bhej dena
     res.json(guide);
 
   } catch (error) {
-    console.error("Server Error:", error.message);
+    console.error("Main Server Error:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
